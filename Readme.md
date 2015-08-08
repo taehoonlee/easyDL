@@ -1,8 +1,8 @@
 # easyDL
 Easy and fast deep learning in MATLAB.<br />
-Currently, easyDL supports supervised deep neural networks only.<br />
-You can easily configure parameters of all layers with a model signature.<br />
-See below examples.<br />
+Currently, easyDL supports supervised deep neural networks only.
+You can easily configure parameters of all layers with a model signature.
+Please refer to below examples.<br />
 Copyright (c) 2015 Taehoon Lee
 
 # Usage
@@ -21,8 +21,8 @@ returns feed-forward values of testdata on the n-th layer in the model.<br />
 if the n is omitted, output is the last layer's activations.
 
 ### model signatures
-There are three types of layers: convolutional(`C`), pooling(`P`), and fully-connected(`F`) type.<br />
-You can designate type of individual layers with a cell type variable called a *model signature*.<br />
+There are three types of layers: convolutional(`C`), pooling(`P`), and fully-connected(`F`) type.
+You can designate type of individual layers with a cell type variable called a *model signature*.
 For example,
 <li> `{'F:100', 'F'}` denotes a hidden layer with 100 units followed by a softmax output layer.
 The number of units must be provided in all F layers except the softmax layer.
@@ -59,7 +59,7 @@ pred = easyDL(fcn, testImages);
 disp(sum(testLabels==pred) / length(pred));
 ```
 This configuration and options gives 98.07% accuracy.
-And the elapsed time is 51 seconds in my PC (i5-3570K@3.4GHz).<br />
+And the elapsed time is 51 seconds in my PC (i5-3570K, 3.4GHz).<br />
 
 ### example 2: a convolutional layers + a pooling layer + a softmax output.
 ```
@@ -71,17 +71,17 @@ cnn = easyDL(images, labels, {'C:12@9x9', 'P:2x2,max', 'F'}, options);
 pred = easyDL(cnn, testImages);
 disp(sum(testLabels==pred) / length(pred));
 ```
-The example 2 produces 98.29% accuracy runs in 3 minutes.
+The example 2 produces 98.29% accuracy and runs in 3 minutes.
 
 ### example 3: two convolutional and two pooling layers + a hidden layer + a softmax output.
 ```
 clear('options');
 % set init learning rate to 0.1 and
-% anneal it by factor of two after 3 epochs
-options.alpha = '0.1, 0.5@3';
-options.epochs = 12;
+% anneal it by factor of two after 4 epochs
+options.alpha = '0.1, 0.5@4';
+options.epochs = 20;
 cnn = easyDL(images, labels, {'C:8@5x5', 'P:2x2,max', 'C:12@5x5', 'P:2x2,max', 'F:100', 'F'}, options, testImages, testLabels);
 pred = easyDL(cnn, testImages);
 disp(sum(testLabels==pred) / length(pred));
 ```
-The example 3 produces 99.04% accuracy runs in 2.5 hours.
+The example 3 produces 99.04% accuracy and runs in 1 hour.
