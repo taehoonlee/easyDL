@@ -136,11 +136,13 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
 
         idx = randperm(numSamples);
 
-        tic;
+        epochtime = tic;
 
         for batch = 1:minibatch:(numSamples-minibatch+1)
             
             iter = iter + 1;
+            
+            itertime = tic;
             
             % change momentum
             if numel(momentumList) > 0
@@ -208,11 +210,7 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
                     K = layers{i}.outDim(3);
                     
                     tmpdelta = delta{i+1} .* a{i+1} .* (1-a{i+1});
-                    for m = 1:M
-                        for k = 1:K
-                            tmpdelta(:,:,k,m) = rot90(tmpdelta(:,:,k,m),2);
-                        end
-                    end
+                    tmpdelta = rot90(tmpdelta, 2);
 
                     gradW = zeros(size(layers{i}.W));
                     gradW_1norm = zeros(size(layers{i}.W));
@@ -220,8 +218,7 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
                         for k = 1:K
                             for j = 1:J
                                 gradW(:,:,j,k) = gradW(:,:,j,k) + conv2(a{i}(:,:,j,m), tmpdelta(:,:,k,m), 'valid');
-                                %grad1W_1norm(:,:,filterNum) = grad1W_1norm(:,:,filterNum) + conv2(im(:,:,channelNum), deriv_a2(:,:,filterNum,imageNum), 'valid');
-                                %bc_grad(filterNum) = bc_grad(filterNum) + sum(f_now(:));
+                                %grad1W_1norm(:,:,j,k) = grad1W_1norm(:,:,j,k) + conv2(a{i}(:,:,j,:), tmpdelta(:,:,k,m), 'valid');
                             end
                         end
                     end
@@ -238,9 +235,7 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
                         for j = 1:J
                             for k = 1:K
                                 tmpW = rot90(layers{i}.W(:,:,j,k),2);
-                                for m = 1:M
-                                    delta{i}(:,:,j,m) = delta{i}(:,:,j,m) + conv2(delta{i+1}(:,:,k,m), tmpW);
-                                end
+                                delta{i}(:,:,j,:) = delta{i}(:,:,j,:) + convn(delta{i+1}(:,:,k,:), tmpW);
                             end
                         end
                         clear tmpW;
@@ -258,9 +253,11 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
                 end
             end
             
+            tt = toc(itertime);
+            
         end
 
-        ttt = toc;
+        ttt = toc(epochtime);
 
         if verbose
             fprintf('Epoch %d completed.', epoch);
