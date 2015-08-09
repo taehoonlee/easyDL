@@ -34,6 +34,9 @@ function out = easyDL(varargin)
 % declare a simple string parsing function
 global getNumbers;
 
+% define a simple string parsing function
+getNumbers = @(str) str2double(regexp(str, '[,@]', 'split'));
+
 if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in training mode.
 
     % the first four arguments are data, labels, model (or model signature), options
@@ -41,12 +44,11 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
     labels = varargin{2};
     theta = varargin{3};
     options = varargin{4};
-    if nargin > 4
-        testdata = varargin{5};
-        testlabels = varargin{6};
-    end
+    if nargin > 4,  testdata = varargin{5};     end
+    if nargin > 5,  testlabels = varargin{6};   end
     
-    if size(data,4) == 1 % in case of "height x width x sample" format
+    % in case of "height x width x sample" format
+    if size(data,4) == 1
         data = permute(data, [1 2 4 3]);
     end
 
@@ -54,13 +56,19 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
     [numRows, numCols, numChannels, numSamples] = size(data);
 
     % the format of "matlabels" is "class x sample"
-    numClasses = max(labels);
-    matlabels = zeros(numClasses, numSamples);
-    for c = 1:numClasses, matlabels(c, labels==c) = 1; end
-
+    if ~isempty(labels)
+        numClasses = max(labels);
+        matlabels = zeros(numClasses, numSamples);
+        for c = 1:numClasses, matlabels(c, labels==c) = 1; end
+    end
+    
     % if a model signature is given, parse it.
     if ~isstruct(theta{1})
-        layers = easyDLparseModel(theta, numRows, numCols, numChannels, numClasses);
+        if ~isempty(labels)
+            layers = easyDLparseModel(theta, numRows, numCols, numChannels, numClasses);
+        else
+            layers = easyDLparseModel(theta, numRows, numCols, numChannels);
+        end
     else % otherwise, use it.
         layers = theta;
     end
@@ -71,12 +79,14 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
         if strcmp(layers{c}.type, 'conv') || strcmp(layers{c}.type, 'fc')
             inc{c}.W = zeros(size(layers{c}.W));
             inc{c}.b = zeros(size(layers{c}.b));
+        elseif strcmp(layers{c}.type, 'ae')
+            inc{c}.W1 = zeros(size(layers{c}.W1));
+            inc{c}.b1 = zeros(size(layers{c}.b1));
+            inc{c}.W2 = zeros(size(layers{c}.W2));
+            inc{c}.b2 = zeros(size(layers{c}.b2));
         end
     end
     
-    % define a simple string parsing function
-    getNumbers = @(str) str2double(regexp(str, '[,@]', 'split'));
-
     % parse options
     o = easyDLparseOptions(options);
     
@@ -112,98 +122,137 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
 
             % get next randomly selected minibatch
             batchidx = idx(batch:batch+o.minibatch-1);
-            clear('a');
+            
             a = easyDLforward(layers, data(:,:,:,batchidx));
-            target = matlabels(:,batchidx);
-            M = size(target, 2);
+            M = numel(batchidx);
             
-            delta = cell(numel(layers)+1, 1);
-            delta{end} = (a{end} - target) / M;% .* a{end} .* (1-a{end});
-            
-            for i = numel(layers):-1:1
-                switch layers{i}.type
-                case 'fc'
+            % if supervised training
+            if ~strcmp(layers{1}.type, 'ae')
+                target = matlabels(:,batchidx);
+                
+                delta = cell(numel(layers)+1, 1);
+                delta{end} = (a{end} - target) / M;% .* a{end} .* (1-a{end});
 
-                    % calculate gradient
-                    gradW = delta{i+1} * a{i}' + o.weightdecay * 2 * layers{i}.W;
-                    inc{i}.W = o.momentum * inc{i}.W + o.alpha * gradW;
-                    gradb = sum(delta{i+1}, 2);
-                    inc{i}.b = o.momentum * inc{i}.b + o.alpha * gradb;
-                    
-                    % update delta
-                    delta{i} = layers{i}.W' * delta{i+1};
-                    if i < numel(layers)
-                        delta{i} = delta{i} .* a{i} .* (1-a{i});
-                    end
-                    delta(i+1) = [];
-                    
-                    % if the previous layer is convolutional, the delta needs to be reshaped
-                    if i > 1
-                        if strcmp(layers{i-1}.type, 'pool') || strcmp(layers{i-1}.type, 'conv')
-                            delta{i} = reshape(delta{i}, [layers{i-1}.outDim, M]);
+                for i = numel(layers):-1:1
+                    switch layers{i}.type
+                    case 'fc'
+
+                        % calculate gradient
+                        gradW = delta{i+1} * a{i}' + o.weightdecay * 2 * layers{i}.W;
+                        inc{i}.W = o.momentum * inc{i}.W + o.alpha * gradW;
+                        gradb = sum(delta{i+1}, 2);
+                        inc{i}.b = o.momentum * inc{i}.b + o.alpha * gradb;
+
+                        % update delta
+                        delta{i} = layers{i}.W' * delta{i+1};
+                        if i < numel(layers)
+                            delta{i} = delta{i} .* a{i} .* (1-a{i});
                         end
-                    end
+                        delta(i+1) = [];
 
-                case 'pool'
-
-                    delta{i} = zeros([layers{i}.inDim, M]);
-                    for r = 1:layers{i}.poolDim(1)
-                        for c = 1:layers{i}.poolDim(2)
-                            delta{i}(r:layers{i}.poolDim(1):end,c:layers{i}.poolDim(2):end,:,:) = delta{i+1} / prod(layers{i}.poolDim);
-                        end
-                    end
-                    delta(i+1) = [];
-
-                case 'conv'
-
-                    J = layers{i}.inDim(3);
-                    K = layers{i}.outDim(3);
-                    
-                    tmpdelta = delta{i+1} .* a{i+1} .* (1-a{i+1});
-                    tmpdelta = rot90(tmpdelta, 2);
-
-                    gradW = zeros(size(layers{i}.W));
-                    gradW_1norm = zeros(size(layers{i}.W));
-                    for m = 1:M
-                        for k = 1:K
-                            for j = 1:J
-                                gradW(:,:,j,k) = gradW(:,:,j,k) + conv2(a{i}(:,:,j,m), tmpdelta(:,:,k,m), 'valid');
-                                %grad1W_1norm(:,:,j,k) = grad1W_1norm(:,:,j,k) + conv2(a{i}(:,:,j,:), tmpdelta(:,:,k,m), 'valid');
+                        % if the previous layer is convolutional, the delta needs to be reshaped
+                        if i > 1
+                            if strcmp(layers{i-1}.type, 'pool') || strcmp(layers{i-1}.type, 'conv')
+                                delta{i} = reshape(delta{i}, [layers{i-1}.outDim, M]);
                             end
                         end
-                    end
-                    
-                    gradW = gradW ...
-                        + o.weightdecay * layers{i}.W ...
-                        + o.sparsecoeff * gradW_1norm;
-                    inc{i}.W = o.momentum * inc{i}.W + o.alpha * gradW;
-                    gradb = reshape(sum(sum(sum(tmpdelta,1),2),4),[],1);
-                    inc{i}.b = o.momentum * inc{i}.b + o.alpha * gradb;
-                    
-                    if i > 1
-                        delta{i} = zeros([layers{i}.inDim(1:2), J, M]);
+
+                    case 'pool'
+
+                        delta{i} = zeros([layers{i}.inDim, M]);
+                        for r = 1:layers{i}.poolDim(1)
+                            for c = 1:layers{i}.poolDim(2)
+                                delta{i}(r:layers{i}.poolDim(1):end,c:layers{i}.poolDim(2):end,:,:) = delta{i+1} / prod(layers{i}.poolDim);
+                            end
+                        end
+                        delta(i+1) = [];
+
+                    case 'conv'
+
+                        J = layers{i}.inDim(3);
+                        K = layers{i}.outDim(3);
+
+                        tmpdelta = delta{i+1} .* a{i+1} .* (1-a{i+1});
+                        tmpdelta = rot90(tmpdelta, 2);
+
+                        gradW = zeros(size(layers{i}.W));
+                        gradW_1norm = zeros(size(layers{i}.W));
                         for j = 1:J
                             for k = 1:K
-                                tmpW = rot90(layers{i}.W(:,:,j,k),2);
-                                delta{i}(:,:,j,:) = delta{i}(:,:,j,:) + convn(delta{i+1}(:,:,k,:), tmpW);
+                                if layers{i}.Conn(j,k)
+                                    for m = 1:M
+                                        gradW(:,:,j,k) = gradW(:,:,j,k) + conv2(a{i}(:,:,j,m), tmpdelta(:,:,k,m), 'valid');
+                                        %grad1W_1norm(:,:,j,k) = grad1W_1norm(:,:,j,k) + conv2(a{i}(:,:,j,:), tmpdelta(:,:,k,m), 'valid');
+                                    end
+                                end
                             end
                         end
-                        clear tmpW;
+                        
+                        gradW = gradW ...
+                            + o.weightdecay * layers{i}.W ...
+                            + o.sparsecoeff * gradW_1norm;
+                        inc{i}.W = o.momentum * inc{i}.W + o.alpha * gradW;
+                        gradb = reshape(sum(sum(sum(tmpdelta,1),2),4),[],1);
+                        inc{i}.b = o.momentum * inc{i}.b + o.alpha * gradb;
+
+                        if i > 1
+                            delta{i} = zeros([layers{i}.inDim, M]);
+                            for j = 1:J
+                                for k = 1:K
+                                    if layers{i}.Conn(j,k)
+                                        tmpW = rot90(layers{i}.W(:,:,j,k),2);
+                                        delta{i}(:,:,j,:) = delta{i}(:,:,j,:) + convn(delta{i+1}(:,:,k,:), tmpW);
+                                    end
+                                end
+                            end
+                            clear tmpW;
+                        end
+
                     end
-                    
+
                 end
                 
-            end
-            clear delta;
+            % unsupervised
+            else
+                
+                delta = cell(numel(layers)+1, 1);
+                delta{2} = (a{2}{2} - a{1}) / M;% .* a{end} .* (1-a{end});
+                delta{2}(a{2}{2}<0) = 0;
+                
+                % calculate gradient
+                gradW = delta{2} * a{2}{1}' + o.weightdecay * layers{1}.W2;
+                inc{1}.W2 = o.momentum * inc{1}.W2 + o.alpha * gradW;
+                gradb = sum(delta{2}, 2);
+                inc{1}.b2 = o.momentum * inc{1}.b2 + o.alpha * gradb;
 
+                % update delta
+                delta{1} = layers{1}.W2' * delta{2};
+                delta{1} = delta{1} .* a{2}{1} .* (1-a{2}{1});
+                delta(2) = [];
+
+                % calculate gradient
+                gradW = delta{1} * a{1}' + o.weightdecay * layers{1}.W1;
+                inc{1}.W1 = o.momentum * inc{1}.W1 + o.alpha * gradW;
+                gradb = sum(delta{1}, 2);
+                inc{1}.b1 = o.momentum * inc{1}.b1 + o.alpha * gradb;
+
+            end
+            clear('a', 'delta');
+            
             for i = 1:numel(layers)
-                if ~strcmp(layers{i}.type, 'pool')
+                if strcmp(layers{i}.type, 'conv') || strcmp(layers{i}.type, 'fc')
                     layers{i}.W = layers{i}.W - inc{i}.W;
                     layers{i}.b = layers{i}.b - inc{i}.b;
+                elseif strcmp(layers{i}.type, 'ae')
+                    layers{i}.W1 = layers{i}.W1 - inc{i}.W1;
+                    layers{i}.b1 = layers{i}.b1 - inc{i}.b1;
+                    layers{i}.W2 = layers{i}.W2 - inc{i}.W2;
+                    layers{i}.b2 = layers{i}.b2 - inc{i}.b2;
                 end
             end
             
             tt = toc(itertime);
+            %disp(tt);
             
         end
 
@@ -213,10 +262,14 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
             fprintf('Epoch %d completed.', epoch);
             % check with test dataset after each epoch
             if nargin > 4
-                clear('a');
                 a = easyDLforward(layers, testdata);
-                [~, predlabels] = max(a{end}, [], 1);
-                fprintf(' Test accuracy is %f.', sum(predlabels'==testlabels) / length(testlabels));
+                if ~isempty(labels)
+                    [~, predlabels] = max(a{end}, [], 1);
+                    fprintf(' Test accuracy is %f.', sum(predlabels'==testlabels) / length(testlabels));
+                else
+                    fprintf(' Test recon error is %f.', sqrt(mean(mean((a{end}{end} - a{1}).^2, 2), 1)));
+                end
+                clear('a');
             end
             fprintf(' (%f sec)\n', ttt);
         end
@@ -252,14 +305,19 @@ elseif iscell(varargin{1}) % if the first argument is cell-type, easyDL works in
         L = numel(layers) + 1;
     end
     
-    clear('a');
     a = easyDLforward(layers, testdata);
     
     if L == numel(layers) + 1
-        [~,out] = max(a{end},[],1);
-        out = out';
+        if iscell(a{end})
+            out = a{end};
+        else
+            [~,out] = max(a{end},[],1);
+            out = out';
+        end
     else
         out = a{L};
     end
+    
+    clear('a');
     
 end

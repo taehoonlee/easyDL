@@ -1,5 +1,9 @@
-function layers = easyDLparseModel(theta, numRows, numCols, numChannels, numClasses)
+function layers = easyDLparseModel(theta, numRows, numCols, numChannels, varargin)
 
+    if nargin > 4
+        numClasses = varargin{1};
+    end
+    
     layers = cell(numel(theta), 1);
     
     for c = 1:numel(theta)
@@ -43,9 +47,9 @@ function layers = easyDLparseModel(theta, numRows, numCols, numChannels, numClas
                         tmp4(end-4:end,:) = [];
                         %layers{c}.Conn = [tmp3, tmp4];
                         if layers{c}.inDim(3) == layers{c}.outDim(3)
-                            layers{c}.Conn = tmp2;
+                            layers{c}.Conn = tmp3;
                         else
-                            layers{c}.Conn = [tmp2, tmp3];
+                            layers{c}.Conn = [tmp3, tmp4];
                         end
                     else
                         layers{c}.Conn = true(layers{c}.inDim(3), layers{c}.outDim(3));
@@ -103,6 +107,34 @@ function layers = easyDLparseModel(theta, numRows, numCols, numChannels, numClas
                     	layers{c}.dropout = str2double(ttmp{2});
                     end
                 end
+                
+            case 'a'
 
+                layers{c}.type = 'ae';
+                if c == 1
+                    layers{c}.inDim = prod([numRows, numCols, numChannels]);
+                else
+                    layers{c}.inDim = prod(layers{c-1}.outDim);
+                end
+                
+                % the number of output units must be given.
+                assert(~isempty(info), 'the number of hidden units must be provided.');
+                layers{c}.outDim = str2double(info(1));
+                
+                r  = sqrt(6) / sqrt(layers{c}.inDim + layers{c}.outDim + 1);
+                layers{c}.W1 = rand(layers{c}.outDim, layers{c}.inDim) * 2 * r - r;
+                layers{c}.b1 = zeros(layers{c}.outDim, 1);
+                layers{c}.W2 = rand(layers{c}.inDim, layers{c}.outDim) * 2 * r - r;
+                layers{c}.b2 = zeros(layers{c}.inDim, 1);
+                
+                % parse dropout option
+                layers{c}.dropout = 0;
+                if numel(tmp) > 1
+                    ttmp = regexp(tmp{2}, ':', 'split');
+                    if strcmpi(ttmp{1}, 'dropout')
+                    	layers{c}.dropout = str2double(ttmp{2});
+                    end
+                end
+                
         end
     end

@@ -44,5 +44,15 @@ function a = easyDLforward(layers, testdata)
             else % otherwise, perform sigmoid operation.
                 a{i+1} = 1 ./ ( 1 + exp(-aux1) );
             end
+        case 'ae'
+            if layers{i}.dropout > 0
+                a{i} = a{i} .* (rand(size(a{i})) > layers{i}.dropout);
+            end
+            if i == 1
+                a{i} = reshape(a{i}, prod(layers{i}.inDim), []);
+            end
+            a{i+1} = cell(2, 1);
+            a{i+1}{1} = 1 ./ ( 1 + exp(-bsxfun(@plus, layers{i}.W1 * a{i}, layers{i}.b1)) );
+            a{i+1}{2} = max(bsxfun(@plus, layers{i}.W2 * a{i+1}{1}, layers{i}.b2), 0);
         end
     end
