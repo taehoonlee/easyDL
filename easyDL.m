@@ -31,6 +31,9 @@ function out = easyDL(varargin)
 
 %   Copyright (c) 2015 Taehoon Lee
 
+% declare a simple string parsing function
+global getNumbers;
+
 if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in training mode.
 
     % the first four arguments are data, labels, model (or model signature), options
@@ -71,97 +74,44 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
         end
     end
     
-    %%%%%%%%%%%%%%%
-    %%% options %%%
-    %%%%%%%%%%%%%%%
-    
-    % check required options
-    assert(isfield(options, 'epochs'), 'the number of epochs must be provided.');
-    
-    % provide default options
-    
-    % set init learning rate to 0.1 and anneal it by factor of two after 10 epochs
-    alpha = '0.1, 0.5@10';
-    
-    % set init momentum to 0.5 and change it to 0.95 after 20 iterations
-    momentumList = {'0.5', '0.95@20'};
-    
-    % provide other default options
-    minibatch = 100;
-    weightDecay = 1e-4;
-    sparseCoeff = 0;
-    verbose = true;
-    
-    % get options from the input argument
-    epochs = options.epochs;
-    if isfield(options, 'alpha'),           alpha = options.alpha; end
-    if isfield(options, 'minibatch'),       minibatch = options.minibatch; end
-    if isfield(options, 'weightdecay'),     weightDecay = options.weightdecay; end
-    if isfield(options, 'sparsecoeff'),     sparseCoeff = options.sparsecoeff; end
-    if isfield(options, 'verbose'),         verbose = options.verbose; end
-    
     % define a simple string parsing function
     getNumbers = @(str) str2double(regexp(str, '[,@]', 'split'));
-    
-    % parse learning rate information
-    if ischar(alpha)
-        alpha = getNumbers(alpha);
-        if numel(alpha) > 1
-            annealAlpha = alpha(2);
-            annealAlphaEpoch = alpha(3);
-            alpha = alpha(1);
-        end
-    end
-    
-    % parse a list of momentum values
-    if iscell(momentumList)
-        if ischar(momentumList{1})
-            momentum = str2double(momentumList{1});
-            momentumList(1) = [];
-            if numel(momentumList) > 0
-                tmp = getNumbers(momentumList{1});
-                nextMomentum = tmp(1);
-                nextMomentumIter = tmp(2);
-            end
-        else
-            momentum = momentumList{1};
-        end
-    else
-        momentum = momentumList(1);
-    end
+
+    % parse options
+    o = easyDLparseOptions(options);
     
     iter = 0;
 
-    for epoch = 1:epochs
+    for epoch = 1:o.epochs
 
         idx = randperm(numSamples);
 
         epochtime = tic;
 
-        for batch = 1:minibatch:(numSamples-minibatch+1)
+        for batch = 1:o.minibatch:(numSamples-o.minibatch+1)
             
             iter = iter + 1;
             
             itertime = tic;
             
             % change momentum
-            if numel(momentumList) > 0
-                if iter == nextMomentumIter
-                    momentum = nextMomentum;
-                    if verbose
-                        fprintf('Iter %d completed. Momentum is changed to %f.\n', iter, momentum);
+            if numel(o.momentumList) > 0
+                if iter == o.nextMomentumIter
+                    o.momentum = o.nextMomentum;
+                    if o.verbose
+                        fprintf('Iter %d completed. Momentum is changed to %f.\n', iter, o.momentum);
                     end
-                    momentumList(1) = [];
-                    if numel(momentumList) > 0
-                        tmp = getNumbers(momentumList{1});
-                        nextMomentum = tmp(1);
-                        nextMomentumIter = tmp(2);
+                    o.momentumList(1) = [];
+                    if numel(o.momentumList) > 0
+                        tmp = getNumbers(o.momentumList{1});
+                        o.nextMomentum = tmp(1);
+                        o.nextMomentumIter = tmp(2);
                     end
                 end
             end
 
             % get next randomly selected minibatch
-            batchidx = idx(batch:batch+minibatch-1);
+            batchidx = idx(batch:batch+o.minibatch-1);
             clear('a');
             a = easyDLforward(layers, data(:,:,:,batchidx));
             target = matlabels(:,batchidx);
@@ -175,10 +125,10 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
                 case 'fc'
 
                     % calculate gradient
-                    gradW = delta{i+1} * a{i}' + weightDecay * 2 * layers{i}.W;
-                    inc{i}.W = momentum * inc{i}.W + alpha * gradW;
+                    gradW = delta{i+1} * a{i}' + o.weightdecay * 2 * layers{i}.W;
+                    inc{i}.W = o.momentum * inc{i}.W + o.alpha * gradW;
                     gradb = sum(delta{i+1}, 2);
-                    inc{i}.b = momentum * inc{i}.b + alpha * gradb;
+                    inc{i}.b = o.momentum * inc{i}.b + o.alpha * gradb;
                     
                     % update delta
                     delta{i} = layers{i}.W' * delta{i+1};
@@ -224,11 +174,11 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
                     end
                     
                     gradW = gradW ...
-                        + weightDecay * layers{i}.W ...
-                        + sparseCoeff * gradW_1norm;
-                    inc{i}.W = momentum * inc{i}.W + alpha * gradW;
+                        + o.weightdecay * layers{i}.W ...
+                        + o.sparsecoeff * gradW_1norm;
+                    inc{i}.W = o.momentum * inc{i}.W + o.alpha * gradW;
                     gradb = reshape(sum(sum(sum(tmpdelta,1),2),4),[],1);
-                    inc{i}.b = momentum * inc{i}.b + alpha * gradb;
+                    inc{i}.b = o.momentum * inc{i}.b + o.alpha * gradb;
                     
                     if i > 1
                         delta{i} = zeros([layers{i}.inDim(1:2), J, M]);
@@ -259,7 +209,7 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
 
         ttt = toc(epochtime);
 
-        if verbose
+        if o.verbose
             fprintf('Epoch %d completed.', epoch);
             % check with test dataset after each epoch
             if nargin > 4
@@ -272,11 +222,11 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
         end
         
         % anneal learning rate
-        if exist('annealAlphaEpoch', 'var')
-            if mod(epoch, annealAlphaEpoch) == 0
-                alpha = alpha * annealAlpha;
-                if verbose
-                    fprintf('Learning rate is diminished to %f.\n', alpha);
+        if isfield(o, 'annealAlphaEpoch')
+            if mod(epoch, o.annealAlphaEpoch) == 0
+                o.alpha = o.alpha * o.annealAlpha;
+                if o.verbose
+                    fprintf('Learning rate is diminished to %f.\n', o.alpha);
                 end
             end
         end
