@@ -14,7 +14,7 @@ while it does a testing when the first two arguments are `model` and `testdata`.
 `model = EASYDL(data, labels, model or model signature, options)`<br />
 trains a deep neural network in supervised manner and returns the model.<br />
 `model = EASYDL(data, labels, model or model signature, options, testdata, testlabels)`<br />
-works in the same manner except that the test accuracy is reported after each epoch.
+works in the same manner except that the test accuracy is reported after each epoch.<br />
 `model = EASYDL(data, [], model or model signature, options)`<br />
 constructs an unsupervised neural network (one layer autoencoder only in current version).<br />
 `model = EASYDL(data, labels, model or model signature, options, testdata, testlabels)`<br />
@@ -35,6 +35,7 @@ The number of units must be provided in all F layers except the softmax layer.
 In the last layer, the number of units is automatically set to the number of classes. </li>
 <li> `{'C:10@5x5', 'P:2x2', 'F'}` means a convolutional layer having 10 feature maps of size 5x5,
 a pooling layer with 2x2 mask, and a softmax layer. </li>
+<li> `{'A:100'}` stands for an autoencoder with 100 hidden units. </li>
 
 ### default options
 <li> `alpha` (learning rate): an initial value is 0.1 and it is annealed by factor of two after 10 epochs. </li>
@@ -96,6 +97,8 @@ The example 3 produces 99.04% accuracy and runs in 1 hour.
 ### example 4: an autoencoder.
 ```
 clear('options');
+% set init learning rate to 0.1 and
+% anneal it by factor of two after 4 epochs
 options.alpha = '0.1, 0.5@4';
 options.epochs = 10;
 ae = easyDL(images, [], {'A:200'}, options);
