@@ -9,7 +9,7 @@ function options = easyDLparseOptions(options)
     if ~isfield(options, 'alpha'),          options.alpha = '0.1, 0.5@10'; end
 
     % set init momentum to 0.5 and change it to 0.95 after 20 iterations
-    if ~isfield(options, 'momentumlist'),   options.momentumList = {'0.5', '0.95@20'}; end
+    if ~isfield(options, 'momentumList'),   options.momentumList = {'0.5', '0.95@20'}; end
 
     % provide other default options
     if ~isfield(options, 'minibatch'),      options.minibatch = 100; end
