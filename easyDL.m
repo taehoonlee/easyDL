@@ -128,90 +128,29 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
             
             % if supervised training
             if ~strcmp(layers{1}.type, 'ae')
-                target = matlabels(:,batchidx);
-                
-                delta = cell(numel(layers)+1, 1);
-                delta{end} = (a{end} - target) / M;% .* a{end} .* (1-a{end});
-
-                for i = numel(layers):-1:1
-                    switch layers{i}.type
-                    case 'fc'
-
-                        % calculate gradient
-                        gradW = delta{i+1} * a{i}' + o.weightdecay * 2 * layers{i}.W;
-                        inc{i}.W = o.momentum * inc{i}.W + o.alpha * gradW;
-                        gradb = sum(delta{i+1}, 2);
-                        inc{i}.b = o.momentum * inc{i}.b + o.alpha * gradb;
-
-                        % update delta
-                        delta{i} = layers{i}.W' * delta{i+1};
-                        if i < numel(layers)
-                            delta{i} = delta{i} .* a{i} .* (1-a{i});
+                if ~o.adversarial || epoch == 1
+                    grad = easyDLbackward(layers, a, matlabels(:,batchidx), false, o);
+                else
+                    [grad, gradX] = easyDLbackward(layers, a, matlabels(:,batchidx), true, o);
+                    %x_adv = a{1} - gradX/sqrt(norm(gradX(:,:,1,1),'fro')); x_adv(x_adv<0) = 0; x_adv(x_adv>1) = 1;
+                    x_adv = a{1} - gradX/sqrt(norm(gradX(:,1),'fro')); x_adv(x_adv<0) = 0; x_adv(x_adv>1) = 1;
+                    %if epoch>1, figure;colormap gray;imagesc(x_adv(:,:,1,1)); end
+                    a_adv = easyDLforward(layers, x_adv);
+                    grad2 = easyDLbackward(layers, a_adv, matlabels(:,batchidx), false, o);
+                    for i = 1:numel(layers)
+                        if strcmp(layers{i}.type, 'conv') || strcmp(layers{i}.type, 'fc')
+                            grad{i}.W = ( grad{i}.W + grad2{i}.W ) / 2;
+                            grad{i}.b = ( grad{i}.b + grad2{i}.b ) / 2;
                         end
-                        delta(i+1) = [];
-
-                        % if the previous layer is convolutional, the delta needs to be reshaped
-                        if i > 1
-                            if strcmp(layers{i-1}.type, 'pool') || strcmp(layers{i-1}.type, 'conv')
-                                delta{i} = reshape(delta{i}, [layers{i-1}.outDim, M]);
-                            end
-                        end
-
-                    case 'pool'
-
-                        delta{i} = zeros([layers{i}.inDim, M]);
-                        for r = 1:layers{i}.poolDim(1)
-                            for c = 1:layers{i}.poolDim(2)
-                                delta{i}(r:layers{i}.poolDim(1):end,c:layers{i}.poolDim(2):end,:,:) = delta{i+1} / prod(layers{i}.poolDim);
-                            end
-                        end
-                        delta(i+1) = [];
-
-                    case 'conv'
-
-                        J = layers{i}.inDim(3);
-                        K = layers{i}.outDim(3);
-
-                        tmpdelta = delta{i+1} .* a{i+1} .* (1-a{i+1});
-                        tmpdelta = rot90(tmpdelta, 2);
-
-                        gradW = zeros(size(layers{i}.W));
-                        gradW_1norm = zeros(size(layers{i}.W));
-                        for j = 1:J
-                            for k = 1:K
-                                if layers{i}.Conn(j,k)
-                                    for m = 1:M
-                                        gradW(:,:,j,k) = gradW(:,:,j,k) + conv2(a{i}(:,:,j,m), tmpdelta(:,:,k,m), 'valid');
-                                        %grad1W_1norm(:,:,j,k) = grad1W_1norm(:,:,j,k) + conv2(a{i}(:,:,j,:), tmpdelta(:,:,k,m), 'valid');
-                                    end
-                                end
-                            end
-                        end
-                        
-                        gradW = gradW ...
-                            + o.weightdecay * layers{i}.W ...
-                            + o.sparsecoeff * gradW_1norm;
-                        inc{i}.W = o.momentum * inc{i}.W + o.alpha * gradW;
-                        gradb = reshape(sum(sum(sum(tmpdelta,1),2),4),[],1);
-                        inc{i}.b = o.momentum * inc{i}.b + o.alpha * gradb;
-
-                        if i > 1
-                            delta{i} = zeros([layers{i}.inDim, M]);
-                            for j = 1:J
-                                for k = 1:K
-                                    if layers{i}.Conn(j,k)
-                                        tmpW = rot90(layers{i}.W(:,:,j,k),2);
-                                        delta{i}(:,:,j,:) = delta{i}(:,:,j,:) + convn(delta{i+1}(:,:,k,:), tmpW);
-                                    end
-                                end
-                            end
-                            clear tmpW;
-                        end
-
                     end
-
+                    clear('a', 'grad2');
                 end
-                
+                for i = 1:numel(layers)
+                    if strcmp(layers{i}.type, 'conv') || strcmp(layers{i}.type, 'fc')
+                        inc{i}.W = o.momentum * inc{i}.W + o.alpha * grad{i}.W;
+                        inc{i}.b = o.momentum * inc{i}.b + o.alpha * grad{i}.b;
+                    end
+                end
             % unsupervised
             else
                 
@@ -237,6 +176,7 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
                 inc{1}.b1 = o.momentum * inc{1}.b1 + o.alpha * gradb;
 
             end
+            
             clear('a', 'delta');
             
             for i = 1:numel(layers)
@@ -263,11 +203,11 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
             % check with test dataset after each epoch
             if nargin > 4
                 a = easyDLforward(layers, testdata);
-                if ~isempty(labels)
+                if iscell(a{end})
+                    fprintf(' Test recon error is %f.', sqrt(mean(mean((a{end}{end} - a{1}).^2, 2), 1)));
+                else
                     [~, predlabels] = max(a{end}, [], 1);
                     fprintf(' Test accuracy is %f.', sum(predlabels'==testlabels) / length(testlabels));
-                else
-                    fprintf(' Test recon error is %f.', sqrt(mean(mean((a{end}{end} - a{1}).^2, 2), 1)));
                 end
                 clear('a');
             end

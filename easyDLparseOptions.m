@@ -16,7 +16,7 @@ function options = easyDLparseOptions(options)
     if ~isfield(options, 'weightdecay'),    options.weightdecay = 1e-4; end
     if ~isfield(options, 'sparsecoeff'),    options.sparsecoeff = 0; end
     if ~isfield(options, 'verbose'),        options.verbose = true; end
-
+    
     % employ the simple string parsing function
     global getNumbers;
     
@@ -46,3 +46,6 @@ function options = easyDLparseOptions(options)
     else
         options.momentum = options.momentumList(1);
     end
+    
+    %%%%% advanced options
+    if ~isfield(options, 'adversarial'),        options.adversarial = false; end
