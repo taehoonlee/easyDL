@@ -45,11 +45,20 @@ function layers = easyDLparseModel(theta, numRows, numCols, numChannels, varargi
                             [zeros(5, inMap); tmp1];
                         tmp4(1:5,:) = tmp4(1:5,:) | tmp4(end-4:end,:);
                         tmp4(end-4:end,:) = [];
+                        tmp6 = [tmp1; zeros(8, inMap)] | ...
+                            [zeros(1, inMap); tmp1; zeros(7, inMap)] | ...
+                            [zeros(2, inMap); tmp1; zeros(6, inMap)] | ...
+                            [zeros(6, inMap); tmp1; zeros(2, inMap)] | ...
+                            [zeros(7, inMap); tmp1; zeros(1, inMap)] | ...
+                            [zeros(8, inMap); tmp1];
+                        tmp6(1:8,:) = tmp6(1:8,:) | tmp6(end-7:end,:);
+                        tmp6(end-7:end,:) = [];
                         %layers{c}.Conn = [tmp3, tmp4];
                         if layers{c}.inDim(3) == layers{c}.outDim(3)
-                            layers{c}.Conn = tmp3;
+                            layers{c}.Conn = tmp6;
                         else
-                            layers{c}.Conn = [tmp3, tmp4];
+                            %layers{c}.Conn = [tmp4, tmp6];
+                            layers{c}.Conn = rand(layers{c}.inDim(3), layers{c}.outDim(3)) > 0.66;
                         end
                     else
                         layers{c}.Conn = true(layers{c}.inDim(3), layers{c}.outDim(3));
