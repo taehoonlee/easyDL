@@ -5,6 +5,9 @@ function a = easyDLforward(layers, testdata)
         switch layers{i}.type
         case 'conv'
             a{i+1} = cnnConvolve(a{i}, layers{i}.W, layers{i}.b, layers{i}.Conn);
+            if strcmp(layers{i+1}.type, 'fc')
+                a{i+1} = reshape(a{i+1}, prod(layers{i}.outDim), []);
+            end
         case 'pool'
 %                 a{i+1} = reshape( ...
 %                     mean(reshape( ...
