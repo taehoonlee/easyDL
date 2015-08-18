@@ -15,32 +15,29 @@ function convolvedFeatures = cnnConvolve(images, W, b, Conn)
 %  convolvedFeatures - matrix of convolved features in the form
 %                      convolvedFeatures(imageRow, imageCol, featureNum, imageNum)
 
-[imageR, imageC, ~, numImages] = size(images);
-[filterR, filterC, numInFilters, numOutFilters] = size(W);
+[imageR, imageC, ~, M] = size(images);
+[filterR, filterC, J, K] = size(W);
 convR = imageR - filterR + 1;
 convC = imageC - filterC + 1;
 
-convolvedFeatures = zeros(convR, convC, numOutFilters, numImages);
+convolvedFeatures = zeros(convR, convC, K, M);
 
-filter = zeros(size(W));
-for outFilterNum = 1:numOutFilters
-    for inFilterNum = 1:numInFilters
-        filter(:,:,inFilterNum,outFilterNum) = rot90(W(:,:,inFilterNum,outFilterNum),2);
-    end
-end
+filter = rot90(W,2);
 
 if true
-    for imageNum = 1:numImages
-        for outFilterNum = 1:numOutFilters
-            for inFilterNum = 1:numInFilters
-                if Conn(inFilterNum,outFilterNum)
-                    convolvedFeatures(:, :, outFilterNum, imageNum) = convolvedFeatures(:, :, outFilterNum, imageNum) + ...
-                        conv2(images(:,:,inFilterNum,imageNum),filter(:,:,inFilterNum,outFilterNum),'valid');
+    for k = 1:K
+        if J > 1
+            for j = 1:J
+                if Conn(j,k)
+                    convolvedFeatures(:,:,k,:) = convolvedFeatures(:,:,k,:) + convn(images(:,:,j,:), filter(:,:,j,k), 'valid');
                 end
             end
-            %convolvedFeatures(:, :, filterNum, imageNum) = conv2(images(:,:,filterNum,imageNum),filter(:,:,filterNum),'valid');
-            convolvedFeatures(:, :, outFilterNum, imageNum) = convolvedFeatures(:, :, outFilterNum, imageNum) + b(outFilterNum);
+        else
+            for m = 1:M
+                convolvedFeatures(:,:,k,m) = convolvedFeatures(:,:,k,m) + conv2(images(:,:,1,m), filter(:,:,1,k), 'valid');
+            end
         end
+        convolvedFeatures(:,:,k,:) = convolvedFeatures(:,:,k,:) + b(k);
     end
 else
     for filterNum = 1:numFilters

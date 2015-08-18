@@ -85,16 +85,18 @@ end
             end
             ndelta = delta{i+1} .* a{i+1} .* (1-a{i+1});
             ndelta = rot90(ndelta, 2);
+            ndelta = flip(ndelta, 4);
 
             gradW = zeros(size(layers{i}.W));
             gradW_1norm = zeros(size(layers{i}.W));
             for j = 1:J
                 for k = 1:K
                     if layers{i}.Conn(j,k)
-                        for m = 1:M
-                            gradW(:,:,j,k) = gradW(:,:,j,k) + conv2(a{i}(:,:,j,m), ndelta(:,:,k,m), 'valid');
+                        gradW(:,:,j,k) = gradW(:,:,j,k) + convn(a{i}(:,:,j,:), ndelta(:,:,k,:), 'valid');
+                        %for m = 1:M
+                        %    gradW(:,:,j,k) = gradW(:,:,j,k) + conv2(a{i}(:,:,j,m), ndelta(:,:,k,m), 'valid');
                             %grad1W_1norm(:,:,j,k) = grad1W_1norm(:,:,j,k) + conv2(a{i}(:,:,j,:), tmpdelta(:,:,k,m), 'valid');
-                        end
+                        %end
                     end
                 end
             end
