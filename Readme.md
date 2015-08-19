@@ -17,7 +17,7 @@ trains a deep neural network in supervised manner and returns the model.<br />
 works in the same manner except that the test accuracy is reported after each epoch.<br />
 `model = EASYDL(data, [], model or model signature, options)`<br />
 constructs an unsupervised neural network (one layer autoencoder only in current version).<br />
-`model = EASYDL(data, labels, model or model signature, options, testdata, testlabels)`<br />
+`model = EASYDL(data, [], model or model signature, options, testdata, testlabels)`<br />
 performs with the same training procedure, and reports the test recon error after each epoch.
 
 ### testing
