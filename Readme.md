@@ -81,14 +81,14 @@ disp(sum(testLabels==pred) / length(pred));
 The example 2 produces 98.29% accuracy and runs in 3 minutes.
 
 ### example 3: two convolutional and two pooling layers + a softmax output.
-The connectivity between the 12(`C:12@5x5`) and 24(`C:24@5x5,sparseconn`) feature maps is sparse.
+The connectivity between the 12(`C:12@5x5`) and 24(`C:24@5x5,sparseconn:4`) feature maps is sparse.
 ```
 clear('options');
 % set init learning rate to 0.1 and
 % anneal it by factor of two after 4 epochs
 options.alpha = '0.1, 0.5@4';
 options.epochs = 20;
-cnn2 = easyDL(images, labels, {'C:12@5x5', 'P:2x2,max', 'C:24@5x5,sparseconn', 'P:2x2,max', 'F'}, options);
+cnn2 = easyDL(images, labels, {'C:12@5x5', 'P:2x2,max', 'C:24@5x5,sparseconn:4', 'P:2x2,max', 'F'}, options);
 pred = easyDL(cnn2, testImages);
 disp(sum(testLabels==pred) / length(pred));
 ```

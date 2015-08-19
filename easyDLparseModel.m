@@ -26,45 +26,37 @@ function layers = easyDLparseModel(theta, numRows, numCols, numChannels, varargi
                 layers{c}.b = zeros(numOutFilters, 1);
                 layers{c}.numFilters = numOutFilters;
 
+                inMap = layers{c}.inDim(3);
+                outMap = layers{c}.outDim(3);
                 if numel(tmp) > 1
-                    if strcmpi(tmp{2}, 'sparseconn')
-                        inMap = layers{c}.inDim(3);
-                        tmp1 = logical(eye(inMap));
-                        tmp2 = [tmp1; zeros(3, inMap)] | ...
-                            [zeros(3, inMap); tmp1];
-                        tmp2(1:3,:) = tmp2(1:3,:) | tmp2(end-2:end,:);
-                        tmp2(end-2:end,:) = [];
-                        tmp3 = [tmp1; zeros(2, inMap)] | ...
-                            [zeros(1, inMap); tmp1; zeros(1, inMap)] | ...
-                            [zeros(2, inMap); tmp1];
-                        tmp3(1:2,:) = tmp3(1:2,:) | tmp3(end-1:end,:);
-                        tmp3(end-1:end,:) = [];
-                        tmp4 = [tmp1; zeros(5, inMap)] | ...
-                            [zeros(1, inMap); tmp1; zeros(4, inMap)] | ...
-                            [zeros(4, inMap); tmp1; zeros(1, inMap)] | ...
-                            [zeros(5, inMap); tmp1];
-                        tmp4(1:5,:) = tmp4(1:5,:) | tmp4(end-4:end,:);
-                        tmp4(end-4:end,:) = [];
-                        tmp6 = [tmp1; zeros(8, inMap)] | ...
-                            [zeros(1, inMap); tmp1; zeros(7, inMap)] | ...
-                            [zeros(2, inMap); tmp1; zeros(6, inMap)] | ...
-                            [zeros(6, inMap); tmp1; zeros(2, inMap)] | ...
-                            [zeros(7, inMap); tmp1; zeros(1, inMap)] | ...
-                            [zeros(8, inMap); tmp1];
-                        tmp6(1:8,:) = tmp6(1:8,:) | tmp6(end-7:end,:);
-                        tmp6(end-7:end,:) = [];
-                        %layers{c}.Conn = [tmp3, tmp4];
-                        if layers{c}.inDim(3) == layers{c}.outDim(3)
-                            layers{c}.Conn = tmp6;
+                    ttmp = regexp(tmp{2}, ':', 'split');
+                    if strcmpi(ttmp{1}, 'sparseconn') || strcmpi(ttmp{1}, 'sc')
+                        if numel(ttmp) > 1
+                            con = str2double(ttmp{2});
                         else
-                            %layers{c}.Conn = [tmp4, tmp6];
-                            layers{c}.Conn = rand(layers{c}.inDim(3), layers{c}.outDim(3)) > 0.66;
+                            con = inMap / 2;
+                        end
+                        tmpR = ceil( (outMap+con-1) / inMap ) * inMap;
+                        layers{c}.Conn = false(tmpR, outMap);
+                        tmp1 = logical(eye(outMap));
+                        for i = 1:con
+                            layers{c}.Conn(i:i-1+outMap,:) = layers{c}.Conn(i:i-1+outMap,:) | tmp1;
+                        end
+                        for i = 1:(tmpR/inMap)
+                            layers{c}.Conn(1:inMap,:) = layers{c}.Conn(1:inMap,:) | layers{c}.Conn((i-1)*inMap+1:i*inMap,:);
+                        end
+                        layers{c}.Conn(inMap+1:end,:) = [];
+                        
+                        layers{c}.Conn = false(inMap, outMap);
+                        for i = 1:outMap
+                            tttmp = randperm(inMap);
+                            layers{c}.Conn(tttmp(1:con),i) = true;
                         end
                     else
-                        layers{c}.Conn = true(layers{c}.inDim(3), layers{c}.outDim(3));
+                        layers{c}.Conn = true(inMap, outMap);
                     end
                 else
-                    layers{c}.Conn = true(layers{c}.inDim(3), layers{c}.outDim(3));
+                    layers{c}.Conn = true(inMap, outMap);
                 end
 
             case 'p'
