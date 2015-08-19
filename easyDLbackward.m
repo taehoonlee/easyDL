@@ -63,6 +63,7 @@ end
                     delta{i}(r:layers{i}.poolDim(1):end,c:layers{i}.poolDim(2):end,:,:) = delta{i+1} / prod(layers{i}.poolDim);
                 end
             end
+            delta{i} = delta{i} .* a{i} .* (1-a{i});
             delta(i+1) = [];
 
             if adversarial
@@ -83,9 +84,7 @@ end
             if strcmp(layers{i+1}.type, 'fc')
                 a{i+1} = reshape(a{i+1}, size(delta{i+1}));
             end
-            ndelta = delta{i+1} .* a{i+1} .* (1-a{i+1});
-            ndelta = rot90(ndelta, 2);
-            ndelta = flip(ndelta, 4);
+            ndelta = flip(rot90(delta{i+1}, 2), 4);
 
             gradW = zeros(size(layers{i}.W));
             gradW_1norm = zeros(size(layers{i}.W));
@@ -131,12 +130,10 @@ end
                 for j = 1:J
                     for k = 1:K
                         if layers{i}.Conn(j,k)
-                            tmpW = rot90(layers{i}.W(:,:,j,k),2);
-                            delta{i}(:,:,j,:) = delta{i}(:,:,j,:) + convn(delta{i+1}(:,:,k,:), tmpW);
+                            delta{i}(:,:,j,:) = delta{i}(:,:,j,:) + convn(delta{i+1}(:,:,k,:), layers{i}.W(:,:,j,k));
                         end
                     end
                 end
-                clear tmpW;
             end
 
         end
