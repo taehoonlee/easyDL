@@ -17,6 +17,10 @@ function [grad, gradX] = easyDLbackward(layers, a, target, adversarial, o)
 if i == 0
 delta{i+1}(a{i+1}<=0.5) = delta{i+1}(a{i+1}<=0.5) * 5;
 end
+            if i < numel(layers)
+                delta{i+1} = delta{i+1} .* a{i+1} .* (1-a{i+1});
+            end
+            
             % calculate gradient
             gradW = delta{i+1} * a{i}' + o.weightdecay * 2 * layers{i}.W;
             grad{i}.W = gradW;
@@ -29,9 +33,6 @@ end
 
             % update delta
             delta{i} = layers{i}.W' * delta{i+1};
-            if i < numel(layers)
-                delta{i} = delta{i} .* a{i} .* (1-a{i});
-            end
             delta(i+1) = [];
 
             % if the previous layer is convolutional, the delta needs to be reshaped
@@ -63,7 +64,6 @@ end
                     delta{i}(r:layers{i}.poolDim(1):end,c:layers{i}.poolDim(2):end,:,:) = delta{i+1} / prod(layers{i}.poolDim);
                 end
             end
-            delta{i} = delta{i} .* a{i} .* (1-a{i});
             delta(i+1) = [];
 
             if adversarial
@@ -84,6 +84,7 @@ end
             if strcmp(layers{i+1}.type, 'fc')
                 a{i+1} = reshape(a{i+1}, size(delta{i+1}));
             end
+            delta{i+1} = delta{i+1} .* a{i+1} .* (1-a{i+1});
             ndelta = flip(rot90(delta{i+1}, 2), 4);
 
             gradW = zeros(size(layers{i}.W));
