@@ -75,20 +75,34 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
 
     % initialize incrementals
     inc = cell(numel(layers), 1);
+    numParameters = 0;
     for c = 1:numel(layers)
         if strcmp(layers{c}.type, 'conv') || strcmp(layers{c}.type, 'fc')
             inc{c}.W = zeros(size(layers{c}.W));
             inc{c}.b = zeros(size(layers{c}.b));
+            numParameters = numParameters + numel(layers{c}.b);
+            if strcmp(layers{c}.type, 'fc')
+                numParameters = numParameters + numel(layers{c}.W);
+            elseif strcmp(layers{c}.type, 'conv')
+                numParameters = numParameters + numel(layers{c}.W) * sum(layers{c}.Conn(:)) / numel(layers{c}.Conn);
+            end
         elseif strcmp(layers{c}.type, 'ae')
             inc{c}.W1 = zeros(size(layers{c}.W1));
             inc{c}.b1 = zeros(size(layers{c}.b1));
             inc{c}.W2 = zeros(size(layers{c}.W2));
             inc{c}.b2 = zeros(size(layers{c}.b2));
+            numParameters = numParameters + numel(layers{c}.W1) + numel(layers{c}.b1);
+            numParameters = numParameters + numel(layers{c}.W2) + numel(layers{c}.b2);
         end
     end
     
     % parse options
     o = easyDLparseOptions(options);
+    
+    % show the number of parameters
+    if o.verbose
+        fprintf('The number of parameters is %d.\n', numParameters);
+    end
     
     iter = 0;
 
