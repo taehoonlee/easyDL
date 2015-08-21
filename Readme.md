@@ -48,10 +48,10 @@ a pooling layer with 2x2 mask, and a softmax layer. </li>
 ### dataset preparation
 The MNIST dataset can be found [here](http://yann.lecun.com/exdb/mnist/).<br />
 There are two matrices and two vectors:
-<li> images : (28 x 28 x 1 x 60000) matrix. </li>
-<li> labels : (60000 x 1) vector which ranges from 1 to 10. </li>
-<li> testImages : (28 x 28 x 1 x 10000) matrix. </li>
-<li> testLabels : (10000 x 1) vector. </li>
+<li> `images`: (28 x 28 x 1 x 60000) matrix. </li>
+<li> `labels`: (60000 x 1) vector which ranges from 1 to 10. </li>
+<li> `testImages`: (28 x 28 x 1 x 10000) matrix. </li>
+<li> `testLabels`: (10000 x 1) vector. </li>
 
 ### example 1: two fully connected hidden layers + a softmax output.
 The numbers of nodes here are 784, 200, 100, and 10.
@@ -81,14 +81,18 @@ disp(sum(testLabels==pred) / length(pred));
 The example 2 produces 98.29% accuracy and runs in 3 minutes.
 
 ### example 3: two convolutional and two pooling layers + a softmax output.
-The connectivity between the 12(`C:12@5x5`) and 24(`C:24@5x5,sparseconn:4`) feature maps is sparse.
+The connectivity between the 12(`C:15@5x5`) and 24(`C:25@5x5,sparseconn:5`) feature maps is sparse.
 ```
 clear('options');
+% set init momentum to 0.9 and
+% increase it to 0.95 after 5 epochs and 0.99 after 10 epochs
+options.momentumList = {'0.9', '0.95@3001', '0.99@6001'};
 % set init learning rate to 0.1 and
-% anneal it by factor of two after 4 epochs
-options.alpha = '0.1, 0.5@4';
-options.epochs = 20;
-cnn2 = easyDL(images, labels, {'C:12@5x5', 'P:2x2,max', 'C:24@5x5,sparseconn:4', 'P:2x2,max', 'F'}, options);
+% anneal it by factor of ten after 10 epochs
+options.alpha = '0.1, 0.316@5';
+options.weightdecay = 1e-5;
+options.epochs = 30;
+cnn2 = easyDL(images, labels, {'C:15@5x5', 'P:2x2', 'C:25@5x5,sparseconn:5', 'P:2x2', 'F:30', 'F'}, options);
 pred = easyDL(cnn2, testImages);
 disp(sum(testLabels==pred) / length(pred));
 ```
