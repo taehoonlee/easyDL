@@ -116,8 +116,8 @@ The example 4 produces 0.0527 (RMSE) recon error and runs in 1 minute.
 You can designate the activation function in `C` and `F` layers. For example, `C:12@5x5,relu`, `F:100,tanh`, and so on.
 <li> (default) `sigm`: f(x) = 1 / ( 1 + exp(-x) ) </li>
 <li> `tanh`: f(x) = tanh(x) </li>
-<li> `relu`: f(x) = max(0, x) (see (Maas et al., ICML 2013)[http://ai.stanford.edu/~amaas/papers/relu_hybrid_icml2013_final.pdf]) </li>
-<li> `softplus`: f(x) = ln( 1 + exp(x) ) (see (wikipedia)[https://en.wikipedia.org/wiki/Rectifier_(neural_networks)])</li>
+<li> `relu`: f(x) = max(0, x) (see [Maas et al., ICML 2013](http://ai.stanford.edu/~amaas/papers/relu_hybrid_icml2013_final.pdf)) </li>
+<li> `softplus`: f(x) = ln( 1 + exp(x) ) (see [wikipedia](https://en.wikipedia.org/wiki/Rectifier_(neural_networks)))</li>
 
 # Todo
 <li> stacked autoencoders </li>
