@@ -5,6 +5,7 @@ function a = easyDLforward(layers, testdata)
         switch layers{i}.type
         case 'conv'
             a{i+1} = cnnConvolve(a{i}, layers{i}.W, layers{i}.b, layers{i}.Conn);
+            a{i+1} = layers{i}.actfun( a{i+1} );
             if strcmp(layers{i+1}.type, 'fc')
                 a{i+1} = reshape(a{i+1}, prod(layers{i}.outDim), []);
             end
@@ -45,7 +46,8 @@ function a = easyDLforward(layers, testdata)
                 aux3 = exp(bsxfun(@minus, aux1, max(aux1, [], 1)));
                 a{i+1} = bsxfun(@rdivide, aux3, sum(aux3));
             else % otherwise, perform sigmoid operation.
-                a{i+1} = 1 ./ ( 1 + exp(-aux1) );
+                %aux1(aux1<0) = aux1(aux1<0) / 5;
+                a{i+1} = layers{i}.actfun( aux1 );
             end
         case 'ae'
             if layers{i}.dropout > 0

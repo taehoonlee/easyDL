@@ -18,11 +18,11 @@ if i == 0
 delta{i+1}(a{i+1}<=0.5) = delta{i+1}(a{i+1}<=0.5) * 5;
 end
             if i < numel(layers)
-                delta{i+1} = delta{i+1} .* a{i+1} .* (1-a{i+1});
+                delta{i+1} = delta{i+1} .* layers{i}.derfun( a{i+1} );
             end
             
             % calculate gradient
-            gradW = delta{i+1} * a{i}' + o.weightdecay * 2 * layers{i}.W;
+            gradW = delta{i+1} * a{i}' + o.weightdecay * layers{i}.W;
             grad{i}.W = gradW;
             gradb = sum(delta{i+1}, 2);
             grad{i}.b = gradb;
@@ -84,7 +84,7 @@ end
             if strcmp(layers{i+1}.type, 'fc')
                 a{i+1} = reshape(a{i+1}, size(delta{i+1}));
             end
-            delta{i+1} = delta{i+1} .* a{i+1} .* (1-a{i+1});
+            delta{i+1} = delta{i+1} .* layers{i}.derfun( a{i+1} );
             ndelta = flip(rot90(delta{i+1}, 2), 4);
 
             gradW = zeros(size(layers{i}.W));
@@ -92,7 +92,7 @@ end
             for j = 1:J
                 for k = 1:K
                     if layers{i}.Conn(j,k)
-                        gradW(:,:,j,k) = gradW(:,:,j,k) + convn(a{i}(:,:,j,:), ndelta(:,:,k,:), 'valid');
+                        gradW(:,:,j,k) = convn(a{i}(:,:,j,:), ndelta(:,:,k,:), 'valid');
                         %for m = 1:M
                         %    gradW(:,:,j,k) = gradW(:,:,j,k) + conv2(a{i}(:,:,j,m), ndelta(:,:,k,m), 'valid');
                             %grad1W_1norm(:,:,j,k) = grad1W_1norm(:,:,j,k) + conv2(a{i}(:,:,j,:), tmpdelta(:,:,k,m), 'valid');

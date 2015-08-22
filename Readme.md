@@ -81,7 +81,7 @@ disp(sum(testLabels==pred) / length(pred));
 The example 2 produces 98.29% accuracy and runs in 3 minutes.
 
 ### example 3: two convolutional and two pooling layers + a softmax output.
-The connectivity between the 12(`C:15@5x5`) and 24(`C:25@5x5,sparseconn:5`) feature maps is sparse.
+The connectivity between the 12(`C:12@5x5,relu`) and 24(`C:24@5x5,sc:6,relu`) feature maps is sparse.
 ```
 clear('options');
 % set init momentum to 0.9 and
@@ -90,13 +90,12 @@ options.momentumList = {'0.9', '0.95@3001', '0.99@6001'};
 % set init learning rate to 0.1 and
 % anneal it by factor of ten after 10 epochs
 options.alpha = '0.1, 0.316@5';
-options.weightdecay = 1e-5;
-options.epochs = 30;
-cnn2 = easyDL(images, labels, {'C:15@5x5', 'P:2x2', 'C:25@5x5,sparseconn:5', 'P:2x2', 'F:30', 'F'}, options);
+options.epochs = 20;
+cnn2 = easyDL(images, labels, {'C:12@5x5,relu', 'P:2x2', 'C:24@5x5,sc:6,relu', 'P:2x2', 'F:30,relu', 'F'}, options);
 pred = easyDL(cnn2, testImages);
 disp(sum(testLabels==pred) / length(pred));
 ```
-The example 3 produces 99.04% accuracy and runs in 1 hour.
+The example 3 produces 99.32% accuracy and runs in 40 minutes.
 
 ### example 4: an autoencoder.
 ```
@@ -111,8 +110,16 @@ disp(sqrt(mean((recon{end}(:) - testImages(:)).^2, 1)));
 ```
 The example 4 produces 0.0527 (RMSE) recon error and runs in 1 minute.
 
+# Options
+
+### activation functions
+You can designate the activation function in `C` and `F` layers. For example, `C:12@5x5,relu`, `F:100,tanh`, and so on.
+<li> (default) `sigm`: f(x) = 1 / ( 1 + exp(-x) ) </li>
+<li> `tanh`: f(x) = tanh(x) </li>
+<li> `relu`: f(x) = max(0, x) (see (Maas et al., ICML 2013)[http://ai.stanford.edu/~amaas/papers/relu_hybrid_icml2013_final.pdf]) </li>
+<li> `softplus`: f(x) = ln( 1 + exp(x) ) (see (wikipedia)[https://en.wikipedia.org/wiki/Rectifier_(neural_networks)])</li>
+
 # Todo
-<li> various activation function </li>
 <li> stacked autoencoders </li>
 <li> adding sparsity on models </li>
 <li> customized connectivity between feature maps and successive feature maps </li>

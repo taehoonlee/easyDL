@@ -21,42 +21,48 @@ function layers = easyDLparseModel(theta, numRows, numCols, numChannels, varargi
                     layers{c}.inDim = layers{c-1}.outDim;
                 end
                 layers{c}.outDim = [layers{c}.inDim(1:2) - filterDim + 1, numOutFilters];
-
-                layers{c}.W = 0.1 * randn([filterDim, layers{c}.inDim(3), layers{c}.outDim(3)]);
-                layers{c}.b = zeros(numOutFilters, 1);
                 layers{c}.numFilters = numOutFilters;
 
+                % default initialization: normal
+                layers{c}.W = 0.1 * randn([filterDim, layers{c}.inDim(3), layers{c}.outDim(3)]);
+                layers{c}.b = zeros(numOutFilters, 1);
+
+                % default connectivity: full connectivity
                 inMap = layers{c}.inDim(3);
                 outMap = layers{c}.outDim(3);
+                layers{c}.Conn = true(inMap, outMap);
+                
+                % default activation function: sigmoid
+                layers{c}.actfun = @(x) 1 ./ (1+exp(-x));
+                layers{c}.derfun = @(x) x .* (1-x);
+                
+                % parse options
                 if numel(tmp) > 1
-                    ttmp = regexp(tmp{2}, ':', 'split');
-                    if strcmpi(ttmp{1}, 'sparseconn') || strcmpi(ttmp{1}, 'sc')
-                        if numel(ttmp) > 1
-                            con = str2double(ttmp{2});
-                        else
-                            con = inMap / 2;
+                    for a = 2:numel(tmp)
+                        ttmp = regexp(tmp{a}, ':', 'split');
+                        switch lower(ttmp{1})
+                            case {'sparseconn', 'sc'}
+                                if numel(ttmp) > 1
+                                    con = str2double(ttmp{2});
+                                else
+                                    con = inMap / 2;
+                                end
+                                layers{c}.Conn = false(inMap, outMap);
+                                for i = 1:outMap
+                                    tttmp = randperm(inMap);
+                                    layers{c}.Conn(tttmp(1:con),i) = true;
+                                end
+                            case 'tanh'
+                                layers{c}.actfun = @(x) tanh(x);
+                                layers{c}.derfun = @(x) 1 - tanh(x).^2;
+                            case 'relu'
+                                layers{c}.actfun = @(x) max(0, x);
+                                layers{c}.derfun = @(x) (x > 0);
+                            case 'softplus'
+                                layers{c}.actfun = @(x) log(1+exp(x));
+                                layers{c}.derfun = @(x) 1 ./ (1+exp(-x));
                         end
-                        tmpR = ceil( (outMap+con-1) / inMap ) * inMap;
-                        layers{c}.Conn = false(tmpR, outMap);
-                        tmp1 = logical(eye(outMap));
-                        for i = 1:con
-                            layers{c}.Conn(i:i-1+outMap,:) = layers{c}.Conn(i:i-1+outMap,:) | tmp1;
-                        end
-                        for i = 1:(tmpR/inMap)
-                            layers{c}.Conn(1:inMap,:) = layers{c}.Conn(1:inMap,:) | layers{c}.Conn((i-1)*inMap+1:i*inMap,:);
-                        end
-                        layers{c}.Conn(inMap+1:end,:) = [];
-                        
-                        layers{c}.Conn = false(inMap, outMap);
-                        for i = 1:outMap
-                            tttmp = randperm(inMap);
-                            layers{c}.Conn(tttmp(1:con),i) = true;
-                        end
-                    else
-                        layers{c}.Conn = true(inMap, outMap);
                     end
-                else
-                    layers{c}.Conn = true(inMap, outMap);
                 end
 
             case 'p'
@@ -96,16 +102,43 @@ function layers = easyDLparseModel(theta, numRows, numCols, numChannels, varargi
                     layers{c}.outDim = str2double(info(1));
                 end
                 
+                % default initialization: uniform
                 r  = sqrt(6) / sqrt(layers{c}.inDim + layers{c}.outDim + 1);
                 layers{c}.W = rand(layers{c}.outDim, layers{c}.inDim) * 2 * r - r;
                 layers{c}.b = zeros(layers{c}.outDim, 1);
                 
-                % parse dropout option
+                % default activation function: sigmoid
+                if c < numel(layers)
+                    layers{c}.actfun = @(x) 1 ./ (1+exp(-x));
+                    layers{c}.derfun = @(x) x .* (1-x);
+                end
+                
+                % default dropout rate: 0
                 layers{c}.dropout = 0;
+                
+                % parse options
                 if numel(tmp) > 1
-                    ttmp = regexp(tmp{2}, ':', 'split');
-                    if strcmpi(ttmp{1}, 'dropout')
-                    	layers{c}.dropout = str2double(ttmp{2});
+                    for a = 2:numel(tmp)
+                        ttmp = regexp(tmp{a}, ':', 'split');
+                        switch lower(ttmp{1})
+                            case 'dropout'
+                                layers{c}.dropout = str2double(ttmp{2});
+                            case 'tanh'
+                                if c < numel(layers)
+                                    layers{c}.actfun = @(x) tanh(x);
+                                    layers{c}.derfun = @(x) 1 - tanh(x).^2;
+                                end
+                            case 'relu'
+                                if c < numel(layers)
+                                    layers{c}.actfun = @(x) max(0, x);
+                                    layers{c}.derfun = @(x) (x > 0);
+                                end
+                            case 'softplus'
+                                if c < numel(layers)
+                                    layers{c}.actfun = @(x) log(1+exp(x));
+                                    layers{c}.derfun = @(x) 1 ./ (1+exp(-x));
+                                end
+                        end
                     end
                 end
                 

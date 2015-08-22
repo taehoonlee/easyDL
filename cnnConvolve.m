@@ -45,10 +45,4 @@ else
     end
 end
 
-%convolvedFeatures = bsxfun(@plus, convolvedFeatures, permute(b,[2 3 1]));
-
-%---------------------
-%convolvedFeatures(convolvedFeatures<=0) = convolvedFeatures(convolvedFeatures<=0) / 2;
-convolvedFeatures = 1./(1+exp(-convolvedFeatures));
-
 end
