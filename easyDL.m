@@ -37,6 +37,30 @@ global getNumbers;
 % define a simple string parsing function
 getNumbers = @(str) str2double(regexp(str, '[,@]', 'split'));
 
+% declare convolutional functions
+global forward_conv;
+global backward_conv_weight;
+global backward_conv_delta;
+
+% define convolutional functions
+forward_conv = @( a, W, b, conn, convidx, outsize ) ...
+    permute( ...
+        bsxfun(@plus, ...
+            reshape( a(convidx)' * reshape(W, [], size(W, 4)), [outsize, size(W, 4)] ), ...
+            reshape(b, 1, 1, 1, [])), ...
+        [1 2 4 3] );
+
+backward_conv_weight = @( a, delta, convidx, outsize ) ...
+    reshape( ...
+        a(convidx) * reshape(permute(delta, [1 2 4 3]), [], size(delta, 3)), ...
+        outsize );
+
+backward_conv_delta = @( delta_top, weight, convidx, outsize ) ...
+     permute( ...
+        reshape( delta_top(convidx)' * reshape(permute(weight, [1 2 4 3]), [], outsize(3)), ...
+            [outsize(1:2), outsize(4), outsize(3)] ), ...
+        [1 2 4 3] );
+
 if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in training mode.
 
     % the first four arguments are data, labels, model (or model signature), options
@@ -73,6 +97,22 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
         layers = theta;
     end
 
+    % parse options
+    o = easyDLparseOptions(options);
+    
+    % index for convolution
+    for c = 1:numel(layers)
+        if strcmp(layers{c}.type, 'conv')
+            K = layers{c}.outDim(3);
+            M = o.minibatch;
+            filterDim = [size(layers{c}.W, 1), size(layers{c}.W, 2)];
+            layers{c}.ConvIdx = easyDLim2col([layers{c}.inDim, M], filterDim, false);
+            layers{c}.BackConvIdx = easyDLim2col([layers{c}.outDim(1:2) + 2*filterDim - 2, K, M], filterDim, true);
+            layers{c}.vpadding = zeros(filterDim(1)-1, layers{c}.outDim(2), K, M);
+            layers{c}.hpadding = zeros(layers{c}.outDim(1) + 2*filterDim(1) - 2, filterDim(2)-1, K, M);
+        end
+    end
+    
     % initialize incrementals
     inc = cell(numel(layers), 1);
     numParameters = 0;
@@ -96,15 +136,46 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
         end
     end
     
-    % parse options
-    o = easyDLparseOptions(options);
+    if o.gpu
+        for c = 1:numel(layers)
+            if strcmp(layers{c}.type, 'conv') || strcmp(layers{c}.type, 'fc')
+                inc{c}.W = gpuArray(inc{c}.W);
+                inc{c}.b = gpuArray(inc{c}.b);
+                layers{c}.W = gpuArray(layers{c}.W);
+                layers{c}.b = gpuArray(layers{c}.b);
+            elseif strcmp(layers{c}.type, 'ae')
+                inc{c}.W1 = gpuArray(inc{c}.W1);
+                inc{c}.b1 = gpuArray(inc{c}.b1);
+                inc{c}.W2 = gpuArray(inc{c}.W2);
+                inc{c}.b2 = gpuArray(inc{c}.b2);
+                layers{c}.W1 = gpuArray(layers{c}.W1);
+                layers{c}.b1 = gpuArray(layers{c}.b1);
+                layers{c}.W2 = gpuArray(layers{c}.W2);
+                layers{c}.b2 = gpuArray(layers{c}.b2);
+            end
+        end
+        data = gpuArray(data);
+        matlabels = gpuArray(matlabels);
+    end
     
     % show the number of parameters
     if o.verbose
         fprintf('The number of parameters is %d.\n', numParameters);
     end
     
+    if strcmp(layers{1}.type, 'fc') || strcmp(layers{1}.type, 'ae')
+        data = reshape(data, prod(layers{1}.inDim), []);
+        if nargin > 4
+            testdata = reshape(testdata, prod(layers{1}.inDim), []);
+        end
+    end
+    
     iter = 0;
+    if ndims(data) == 4
+        isImageform = true;
+    else
+        isImageform = false;
+    end
 
     for epoch = 1:o.epochs
 
@@ -136,28 +207,64 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
 
             % get next randomly selected minibatch
             batchidx = idx(batch:batch+o.minibatch-1);
-            
-            a = easyDLforward(layers, data(:,:,:,batchidx));
             M = numel(batchidx);
+            
+            for i = 1:numel(layers)
+                if isfield(layers{i}, 'dropout') && layers{i}.dropout > 0
+                    layers{i}.mask = ( rand([layers{i}.inDim, M]) > layers{i}.dropout ) ./ (1 - layers{i}.dropout);
+                else
+                    layers{i}.mask = [];
+                end
+            end
+            
+            if isImageform
+                minibatch = data(:,:,:,batchidx);
+                if o.rotation
+                    minibatch = imrotate(minibatch, randi(21)-11, 'bilinear', 'crop');
+                end
+                if o.scaling
+                    if rand < 0.5
+                        minibatch = imresize(minibatch(3:26,3:26,:,:), [28 28]);
+                    end
+                end
+            else
+                minibatch = data(:,batchidx);
+            end
+            a = easyDLforward(layers, minibatch);
             
             % if supervised training
             if ~strcmp(layers{1}.type, 'ae')
-                if ~o.adversarial || epoch == 1
-                    grad = easyDLbackward(layers, a, matlabels(:,batchidx), false, o);
-                else
-                    [grad, gradX] = easyDLbackward(layers, a, matlabels(:,batchidx), true, o);
-                    %x_adv = a{1} - gradX/sqrt(norm(gradX(:,:,1,1),'fro')); x_adv(x_adv<0) = 0; x_adv(x_adv>1) = 1;
-                    x_adv = a{1} - gradX/sqrt(norm(gradX(:,1),'fro')); x_adv(x_adv<0) = 0; x_adv(x_adv>1) = 1;
+                grad = easyDLbackward(layers, a, matlabels(:,batchidx), o);
+                if o.adversarial || o.manifold
+                    gradX = easyDLbackward_adv(layers, a, matlabels(:,batchidx));
+                    if isImageform
+                        %x_adv = a{1} - ( 1 - (epoch - 1) / o.epochs ) * bsxfun(@rdivide,gradX,sqrt(sum(sum(gradX.^2,1),2)));
+                        x_adv = a{1} - bsxfun(@rdivide,gradX,sqrt(sum(sum(gradX.^2,1),2)));
+                    else
+                        %x_adv = a{1} - ( 1 - (epoch - 1) / o.epochs ) * bsxfun(@rdivide,gradX,sqrt(sum(gradX.^2,1)));
+                        x_adv = a{1} - bsxfun(@rdivide,gradX,sqrt(sum(gradX.^2,1)));
+                    end
+                    x_adv(x_adv<0) = 0; x_adv(x_adv>1) = 1;
                     %if epoch>1, figure;colormap gray;imagesc(x_adv(:,:,1,1)); end
-                    a_adv = easyDLforward(layers, x_adv);
-                    grad2 = easyDLbackward(layers, a_adv, matlabels(:,batchidx), false, o);
-                    for i = 1:numel(layers)
-                        if strcmp(layers{i}.type, 'conv') || strcmp(layers{i}.type, 'fc')
-                            grad{i}.W = ( grad{i}.W + grad2{i}.W ) / 2;
-                            grad{i}.b = ( grad{i}.b + grad2{i}.b ) / 2;
+                    a_adv = easyDLfrward(layers, x_adv, false);
+                    if o.adversarial
+                        grad2 = easyDLbackward(layers, a_adv, matlabels(:,batchidx), o);
+                        for i = 1:numel(layers)
+                            if strcmp(layers{i}.type, 'conv') || strcmp(layers{i}.type, 'fc')
+                                grad{i}.W = ( grad{i}.W + grad2{i}.W ) / 2;
+                                grad{i}.b = ( grad{i}.b + grad2{i}.b ) / 2;
+                            end
+                        end
+                    elseif o.manifold
+                        grad2 = easyDLbackward2(layers, a, a_adv, matlabels(:,batchidx), o);
+                        for i = 1:numel(layers)
+                            if strcmp(layers{i}.type, 'conv') || strcmp(layers{i}.type, 'fc')
+                                grad{i}.W = grad{i}.W + grad2{i}.W;
+                                grad{i}.b = grad{i}.b + grad2{i}.b;
+                            end
                         end
                     end
-                    clear('a', 'grad2');
+                    clear('a_adv', 'grad2');
                 end
                 for i = 1:numel(layers)
                     if strcmp(layers{i}.type, 'conv') || strcmp(layers{i}.type, 'fc')
@@ -194,6 +301,7 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
             clear('a', 'delta');
             
             for i = 1:numel(layers)
+                layers{i}.mask = [];
                 if strcmp(layers{i}.type, 'conv') || strcmp(layers{i}.type, 'fc')
                     layers{i}.W = layers{i}.W - inc{i}.W;
                     layers{i}.b = layers{i}.b - inc{i}.b;
@@ -217,7 +325,7 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
             % check with test dataset after each epoch
             if nargin > 4
                 a = easyDLforward(layers, testdata);
-                if iscell(a{end})
+                if strcmp(layers{1}.type, 'ae')
                     fprintf(' Test recon error is %f.', sqrt(mean(mean((a{end}{end} - a{1}).^2, 2), 1)));
                 else
                     [~, predlabels] = max(a{end}, [], 1);
@@ -239,6 +347,26 @@ if isnumeric(varargin{1}) % if the first argument is numeric, easyDL works in tr
         end
 
     end
+    
+    if o.gpu
+        for c = 1:numel(layers)
+            if strcmp(layers{c}.type, 'conv') || strcmp(layers{c}.type, 'fc')
+                layers{c}.W = gather(layers{c}.W);
+                layers{c}.b = gather(layers{c}.b);
+            elseif strcmp(layers{c}.type, 'ae')
+                layers{c}.W1 = gather(layers{c}.W1);
+                layers{c}.b1 = gather(layers{c}.b1);
+                layers{c}.W2 = gather(layers{c}.W2);
+                layers{c}.b2 = gather(layers{c}.b2);
+            end
+        end
+    end
+    
+    for c = 1:numel(layers)
+        if strcmp(layers{c}.type, 'conv')
+            layers{c} = rmfield(layers{c}, {'ConvIdx', 'BackConvIdx', 'vpadding', 'hpadding'});
+        end
+    end
 
     out = layers;
 
@@ -255,19 +383,25 @@ elseif iscell(varargin{1}) % if the first argument is cell-type, easyDL works in
     % the third argument is an layer index and optional
     if nargin > 2
         L = varargin{3};
-    else % if the layer index is omitted, easyDL returns the last layer's activations.
-        L = numel(layers) + 1;
+    else % if the layer index is omitted, easyDL returns the predicted labels.
+        L = numel(layers) + 2;
+    end
+    
+    if strcmp(layers{1}.type, 'fc') || strcmp(layers{1}.type, 'ae')
+        testdata = reshape(testdata, prod(layers{1}.inDim), []);
     end
     
     a = easyDLforward(layers, testdata);
     
-    if L == numel(layers) + 1
+    if L == numel(layers) + 2
         if iscell(a{end})
             out = a{end};
         else
             [~,out] = max(a{end},[],1);
             out = out';
         end
+    elseif L == 0
+        out = a;
     else
         out = a{L};
     end
