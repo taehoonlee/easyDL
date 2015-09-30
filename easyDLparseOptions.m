@@ -16,6 +16,9 @@ function options = easyDLparseOptions(options)
     if ~isfield(options, 'weightdecay'),    options.weightdecay = 1e-4; end
     if ~isfield(options, 'sparsecoeff'),    options.sparsecoeff = 0; end
     if ~isfield(options, 'verbose'),        options.verbose = true; end
+    if ~isfield(options, 'scaling'),        options.scaling = false; end
+    if ~isfield(options, 'rotation'),       options.rotation = false; end
+    if ~isfield(options, 'gpu'),            options.gpu = false; end
     
     % employ the simple string parsing function
     global getNumbers;
@@ -49,3 +52,4 @@ function options = easyDLparseOptions(options)
     
     %%%%% advanced options
     if ~isfield(options, 'adversarial'),        options.adversarial = false; end
+    if ~isfield(options, 'manifold'),           options.manifold = 0; end
