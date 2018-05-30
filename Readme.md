@@ -30,28 +30,28 @@ if the n is omitted, output is the last layer's activations.
 There are three types of layers: convolutional(`C`), pooling(`P`), feed-forward fully-connected(`F`), and autoencoder(`A`) type.
 You can designate type of individual layers with a cell type variable called a *model signature*.
 For example,
-<li> `{'F:100', 'F'}` denotes a hidden layer with 100 units followed by a softmax output layer.
+- `{'F:100', 'F'}` denotes a hidden layer with 100 units followed by a softmax output layer.
 The number of units must be provided in all F layers except the softmax layer.
-In the last layer, the number of units is automatically set to the number of classes. </li>
-<li> `{'C:10@5x5', 'P:2x2', 'F'}` means a convolutional layer having 10 feature maps of size 5x5,
-a pooling layer with 2x2 mask, and a softmax layer. </li>
-<li> `{'A:100'}` stands for an autoencoder with 100 hidden units. </li>
+In the last layer, the number of units is automatically set to the number of classes.
+- `{'C:10@5x5', 'P:2x2', 'F'}` means a convolutional layer having 10 feature maps of size 5x5,
+a pooling layer with 2x2 mask, and a softmax layer.
+- `{'A:100'}` stands for an autoencoder with 100 hidden units.
 
 ### default options
-<li> `alpha` (learning rate): an initial value is 0.1 and it is annealed by factor of two after 10 epochs. </li>
-<li> `momentum`: an initial value is 0.5 and it is changeed to 0.95 after 20 iterations. </li>
-<li> `minibatch`: 100 </li>
-<li> `weightDecay`: 1e-4 </li>
+- `alpha` (learning rate): an initial value is 0.1 and it is annealed by factor of two after 10 epochs.
+- `momentum`: an initial value is 0.5 and it is changeed to 0.95 after 20 iterations.
+- `minibatch`: 100
+- `weightDecay`: 1e-4
 
 # MNIST Examples
 
 ### dataset preparation
 The MNIST dataset can be found [here](http://yann.lecun.com/exdb/mnist/).<br />
 There are two matrices and two vectors:
-<li> `images`: (28 x 28 x 1 x 60000) matrix. </li>
-<li> `labels`: (60000 x 1) vector which ranges from 1 to 10. </li>
-<li> `testImages`: (28 x 28 x 1 x 10000) matrix. </li>
-<li> `testLabels`: (10000 x 1) vector. </li>
+- `images`: (28 x 28 x 1 x 60000) matrix.
+- `labels`: (60000 x 1) vector which ranges from 1 to 10.
+- `testImages`: (28 x 28 x 1 x 10000) matrix.
+- `testLabels`: (10000 x 1) vector.
 
 ### example 1: two fully connected hidden layers + a softmax output.
 The numbers of nodes here are 784, 200, 100, and 10.
@@ -114,13 +114,13 @@ The example 4 produces 0.0527 (RMSE) recon error and runs in 1 minute.
 
 ### activation functions
 You can designate the activation function in `C` and `F` layers. For example, `C:12@5x5,relu`, `F:100,tanh`, and so on.
-<li> (default) `sigm`: f(x) = 1 / ( 1 + exp(-x) ) </li>
-<li> `tanh`: f(x) = tanh(x) </li>
-<li> `relu`: f(x) = max(0, x) (see [Maas et al., ICML 2013](http://ai.stanford.edu/~amaas/papers/relu_hybrid_icml2013_final.pdf)) </li>
-<li> `softplus`: f(x) = ln( 1 + exp(x) ) (see [wikipedia](https://en.wikipedia.org/wiki/Rectifier_(neural_networks)))</li>
+- (default) `sigm`: f(x) = 1 / ( 1 + exp(-x) )
+- `tanh`: f(x) = tanh(x)
+- `relu`: f(x) = max(0, x) (see [Maas et al., ICML 2013](http://ai.stanford.edu/~amaas/papers/relu_hybrid_icml2013_final.pdf))
+- `softplus`: f(x) = ln( 1 + exp(x) ) (see [wikipedia](https://en.wikipedia.org/wiki/Rectifier_(neural_networks)))
 
 # Todo
-<li> stacked autoencoders </li>
-<li> adding sparsity on models </li>
-<li> customized connectivity between feature maps and successive feature maps </li>
-<li> recurrent layers </li>
+- stacked autoencoders
+- adding sparsity on models
+- customized connectivity between feature maps and successive feature maps
+- recurrent layers
